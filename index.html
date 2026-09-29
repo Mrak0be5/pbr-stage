@@ -203,7 +203,7 @@
       <button class="ghost" type="button" id="frame">В кадр</button>
       <button class="ghost" type="button" id="reset">Сброс</button>
     </div>
-    <p class="status" id="status">В архивах только basecolor. Нормали считаются из рельефа альбедо и тайлятся отдельно.</p>
+    <p class="status" id="status">В архивах только basecolor. Нормали — мягкий рельеф из альбедо, без шума текстуры.</p>
   </aside>
   <p class="hint">ЛКМ — орбита · колесо — масштаб · ПКМ — сдвиг · 1 2 3 — модели</p>
   <script type="importmap">
@@ -231,12 +231,14 @@
       env: 1, exposure: 1, key: 3.4, sync: false, auto: false, view: "pbr",
     };
     const CHIPS = [1, 2, 4, 8];
-    const BAKE = 6.5;
+    const BAKE = 0.4;
+    const BLUR_RADIUS = 6;
+    const SLOPE_LIMIT = 0.16;
     const NORMAL_SIZE = 2048;
 
     const state = { ...DEFAULTS, spin: { x: 0, y: 0, z: 0 } };
     try {
-      const saved = JSON.parse(localStorage.getItem("pbr-studio") || "null");
+      const saved = JSON.parse(localStorage.getItem("pbr-studio-v2") || "null");
       if (saved && typeof saved === "object") Object.assign(state, saved, { spin: state.spin });
       if (state.sync) state.nrm = state.tex;
     } catch { /* keep defaults */ }
@@ -316,7 +318,7 @@
 
     function persist() {
       const { spin, ...rest } = state;
-      localStorage.setItem("pbr-studio", JSON.stringify(rest));
+      localStorage.setItem("pbr-studio-v2", JSON.stringify(rest));
     }
 
     function uniqueMaps(root) {
@@ -340,6 +342,33 @@
       map.needsUpdate = true;
     }
 
+    function blurLuminance(src, size, radius) {
+      const tmp = new Float32Array(src.length);
+      const dst = new Float32Array(src.length);
+      const span = radius * 2 + 1;
+      for (let y = 0; y < size; y++) {
+        let sum = 0;
+        for (let k = -radius; k <= radius; k++) sum += src[y * size + ((k + size) % size)];
+        for (let x = 0; x < size; x++) {
+          tmp[y * size + x] = sum / span;
+          const remove = (x - radius + size) % size;
+          const add = (x + radius + 1) % size;
+          sum += src[y * size + add] - src[y * size + remove];
+        }
+      }
+      for (let x = 0; x < size; x++) {
+        let sum = 0;
+        for (let k = -radius; k <= radius; k++) sum += tmp[((k + size) % size) * size + x];
+        for (let y = 0; y < size; y++) {
+          dst[y * size + x] = sum / span;
+          const remove = (y - radius + size) % size;
+          const add = (y + radius + 1) % size;
+          sum += tmp[add * size + x] - tmp[remove * size + x];
+        }
+      }
+      return dst;
+    }
+
     async function buildNormalMap(image, token) {
       const size = NORMAL_SIZE;
       const canvas = document.createElement("canvas");
@@ -350,10 +379,11 @@
       ctx.drawImage(image, 0, 0, size, size);
       const src = ctx.getImageData(0, 0, size, size).data;
       const out = ctx.createImageData(size, size);
-      const lum = new Float32Array(size * size);
+      let lum = new Float32Array(size * size);
       for (let i = 0, p = 0; i < lum.length; i++, p += 4) {
         lum[i] = (src[p] * 0.2126 + src[p + 1] * 0.7152 + src[p + 2] * 0.0722) / 255;
       }
+      lum = blurLuminance(lum, size, BLUR_RADIUS);
       const pixels = out.data;
       const rows = 40;
       for (let y0 = 0; y0 < size; y0 += rows) {
@@ -373,11 +403,13 @@
             const bl = lum[yp * size + xm];
             const b = lum[yp * size + x];
             const br = lum[yp * size + xp];
-            const hx = (tr + 2 * r + br) - (tl + 2 * l + bl);
-            const hy = (bl + 2 * b + br) - (tl + 2 * t + tr);
-            let nx = -hx * BAKE;
-            let ny = -hy * BAKE;
-            let nz = 1;
+            const sx = (tr + 2 * r + br) - (tl + 2 * l + bl);
+            const sy = (bl + 2 * b + br) - (tl + 2 * t + tr);
+            const slope = Math.hypot(sx, sy);
+            const keep = slope > SLOPE_LIMIT ? SLOPE_LIMIT / slope : 1;
+            const nx = -sx * BAKE * keep;
+            const ny = -sy * BAKE * keep;
+            const nz = 1;
             const len = Math.hypot(nx, ny, nz) || 1;
             const p = (y * size + x) * 4;
             pixels[p] = (nx / len * 0.5 + 0.5) * 255;
