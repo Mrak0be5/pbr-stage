@@ -267,7 +267,7 @@
 
     const state = { ...DEFAULTS, spin: { x: 0, y: 0, z: 0 } };
     try {
-      const saved = JSON.parse(localStorage.getItem("pbr-studio-v3") || "null");
+      const saved = JSON.parse(localStorage.getItem("pbr-studio-v4") || "null");
       if (saved && typeof saved === "object") Object.assign(state, saved, { spin: state.spin });
       if (state.sync) state.nrm = state.tex;
     } catch { /* keep defaults */ }
@@ -347,7 +347,7 @@
 
     function persist() {
       const { spin, ...rest } = state;
-      localStorage.setItem("pbr-studio-v3", JSON.stringify(rest));
+      localStorage.setItem("pbr-studio-v4", JSON.stringify(rest));
     }
 
     function uniqueMaps(root) {
