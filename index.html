@@ -227,6 +227,7 @@
         title: "683eaf",
         hint: "ремни",
         swatch: "#2b2b2b",
+        normal: "tripo_convert_06933c11-07c6-480c-87a2-b4263dac3456.fbm/683eafe5-7a6b-4246-b2e1-65a3f30be39b_normal.PNG",
         rough: "tripo_convert_06933c11-07c6-480c-87a2-b4263dac3456.fbm/683eafe5-7a6b-4246-b2e1-65a3f30be39b_roughness.JPEG",
         metal: "tripo_convert_06933c11-07c6-480c-87a2-b4263dac3456.fbm/683eafe5-7a6b-4246-b2e1-65a3f30be39b_metallic.JPEG",
       },
@@ -236,6 +237,7 @@
         title: "a2bf02",
         hint: "сетка",
         swatch: "#c47a62",
+        normal: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbm/Normal.png",
         rough: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbm/a2bf022a-38d5-4b39-bd71-f3e3e3cf8b5a_roughness.JPEG",
         metal: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbm/a2bf022a-38d5-4b39-bd71-f3e3e3cf8b5a_metallic.JPEG",
       },
@@ -245,6 +247,7 @@
         title: "5ee93b",
         hint: "сапоги",
         swatch: "#e4b8a8",
+        normal: "tripo_convert_aad0c704-443b-43f3-b7f2-1e20af56c21c.fbm/Normal.png",
         rough: "tripo_convert_aad0c704-443b-43f3-b7f2-1e20af56c21c.fbm/5ee93bed-bf44-467c-9980-041b7a32f5d2_roughness.JPEG",
         metal: "tripo_convert_aad0c704-443b-43f3-b7f2-1e20af56c21c.fbm/5ee93bed-bf44-467c-9980-041b7a32f5d2_metallic.JPEG",
       },
@@ -363,13 +366,14 @@
       tex.colorSpace = colorSpace;
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       tex.anisotropy = anisotropy;
+      if (tex.repeat.x < 0.05 || tex.repeat.y < 0.05) tex.repeat.set(1, 1);
       if (!tex.userData.baseRepeat) tex.userData.baseRepeat = tex.repeat.clone();
       tex.needsUpdate = true;
     }
 
     function loadExtraMaps(spec) {
       const loader = new THREE.TextureLoader();
-      const jobs = ["rough", "metal"].filter((key) => spec[key]).map((key) => new Promise((resolve) => {
+      const jobs = ["normal", "rough", "metal"].filter((key) => spec[key]).map((key) => new Promise((resolve) => {
         loader.load(`models/${spec[key]}`, (tex) => {
           prepareMap(tex, THREE.NoColorSpace);
           resolve([key, tex]);
@@ -477,18 +481,23 @@
         const built = source.map((mat) => {
           const map = (mat && (mat.map || mat.emissiveMap)) || null;
           const authoredNormal = mat && mat.normalMap;
-          const normalMap = authoredNormal || (map && normalByMap.get(map)) || null;
+          const normalMap = extras.normal || authoredNormal || (map && normalByMap.get(map)) || null;
+          if (authoredNormal && authoredNormal !== normalMap) authoredNormal.dispose();
           if (normalMap) prepareMap(normalMap, THREE.NoColorSpace);
-          if (normalMap && map && !authoredNormal) {
-            normalMap.flipY = map.flipY;
-            normalMap.offset.copy(map.offset);
-            normalMap.center.copy(map.center);
-            normalMap.rotation = map.rotation;
-          }
           const roughnessMap = extras.rough || (mat && mat.roughnessMap) || null;
           const metalnessMap = extras.metal || (mat && mat.metalnessMap) || null;
           prepareMap(roughnessMap, THREE.NoColorSpace);
           prepareMap(metalnessMap, THREE.NoColorSpace);
+          if (map) {
+            for (const tex of [normalMap, roughnessMap, metalnessMap]) {
+              if (!tex || tex === map) continue;
+              tex.flipY = map.flipY;
+              tex.offset.copy(map.offset);
+              tex.center.copy(map.center);
+              tex.rotation = map.rotation;
+              tex.userData.baseRepeat = (map.userData.baseRepeat || map.repeat).clone();
+            }
+          }
           const pbr = new THREE.MeshPhysicalMaterial({
             map,
             normalMap,
@@ -645,22 +654,29 @@
           if (mat && mat.normalMap) realNormal = true;
         }
       });
+      const extras = await loadExtraMaps(spec);
+      if (token !== loadToken) {
+        extras.normal?.dispose();
+        extras.rough?.dispose();
+        extras.metal?.dispose();
+        return;
+      }
       const normalByMap = new Map();
-      if (!realNormal) {
+      if (!extras.normal && !realNormal) {
         for (const map of maps) {
           if (!map.image) continue;
           const normal = await buildNormalMap(map.image, token);
-          if (!normal) return;
+          if (!normal) {
+            extras.rough?.dispose();
+            extras.metal?.dispose();
+            return;
+          }
           normal.userData.baseRepeat = new THREE.Vector2(1, 1);
           normalByMap.set(map, normal);
         }
       }
       if (token !== loadToken) {
-        for (const tex of normalByMap.values()) tex.dispose();
-        return;
-      }
-      const extras = await loadExtraMaps(spec);
-      if (token !== loadToken) {
+        extras.normal?.dispose();
         extras.rough?.dispose();
         extras.metal?.dispose();
         for (const tex of normalByMap.values()) tex.dispose();
@@ -670,7 +686,8 @@
       applyMaterials();
       const tex = maps[0]?.image;
       const texNote = tex ? `${tex.width}²` : "без текстуры";
-      const normalNote = realNormal ? "нормали из файла" : `нормали ${NORMAL_SIZE}²`;
+      const normalImg = extras.normal?.image;
+      const normalNote = normalImg?.width ? `нормали ${normalImg.width}²` : "без карты нормалей";
       setBar(0);
       setStatus(`${formatCount(countTris(model))} тр. · альбедо ${texNote} · ${normalNote}`);
     }
