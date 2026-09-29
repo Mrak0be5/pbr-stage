@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#100e0c">
+  <title>PBR — три модели</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23110e0c'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23e08a64' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,520;6..72,620&family=Sora:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #f6f1ea;
+      --muted: #b7aa9f;
+      --dim: #8b7e74;
+      --line: rgba(246, 241, 234, 0.12);
+      --copper: #e08a64;
+      --panel: rgba(18, 15, 13, 0.92);
+      --danger: #ffb4a8;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #100e0c; color: var(--ink); }
+    body {
+      font-family: "Sora", "Segoe UI", sans-serif;
+      font-weight: 300;
+      overflow: hidden;
+    }
+    #view { position: fixed; inset: 0; }
+    #view canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+    #view canvas:active { cursor: grabbing; }
+    .wash {
+      position: fixed; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(900px 620px at 78% 12%, rgba(196, 112, 74, 0.16), transparent 60%),
+        radial-gradient(700px 520px at 8% 88%, rgba(70, 92, 120, 0.18), transparent 55%);
+    }
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.42) 100%);
+    }
+    .topbar, .rail, .panel, .hint {
+      position: fixed; z-index: 2;
+    }
+    .topbar {
+      top: 18px; left: 22px; display: flex; align-items: baseline; gap: 12px;
+      pointer-events: none;
+    }
+    .word {
+      font-family: "Newsreader", Georgia, serif;
+      font-weight: 620;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+    .word i { font-style: italic; color: var(--copper); font-weight: 520; }
+    .topbar small { color: var(--dim); letter-spacing: 0.14em; text-transform: uppercase; font-size: 10px; }
+    .rail {
+      top: 74px; left: 18px; display: flex; flex-direction: column; gap: 8px; width: 196px;
+    }
+    .model {
+      display: grid; grid-template-columns: 14px 1fr; gap: 4px 10px;
+      text-align: left; color: var(--ink); background: var(--panel);
+      border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px;
+      cursor: pointer; font: inherit;
+    }
+    .model .swatch { width: 14px; height: 14px; border-radius: 50%; grid-row: span 2; align-self: center; }
+    .model b { font-weight: 500; font-size: 13px; letter-spacing: 0.04em; }
+    .model span { color: var(--dim); font-size: 11px; }
+    .model[aria-pressed="true"] { border-color: rgba(224, 138, 100, 0.85); }
+    .panel {
+      top: 18px; right: 18px; width: 312px; max-height: calc(100% - 36px);
+      overflow: auto; background: var(--panel); border: 1px solid var(--line);
+      border-radius: 18px; padding: 16px 16px 12px;
+    }
+    .panel h2 {
+      margin: 0 0 10px; font-size: 11px; font-weight: 500; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .row { margin: 0 0 12px; }
+    .label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+    .label span { color: var(--muted); }
+    .num {
+      width: 72px; background: transparent; color: var(--ink); border: 1px solid var(--line);
+      border-radius: 8px; padding: 3px 6px; font: inherit; text-align: right;
+    }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 2px;
+      background: rgba(246, 241, 234, 0.22); border-radius: 99px; margin: 8px 0;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: var(--ink); border: 2px solid var(--copper); cursor: pointer;
+    }
+    .chips { display: flex; gap: 6px; }
+    .chips button, .views button, .axes button, .ghost {
+      font: inherit; color: var(--ink); background: transparent;
+      border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; cursor: pointer;
+    }
+    .chips button[aria-pressed="true"], .views button[aria-pressed="true"] {
+      background: var(--copper); color: #1a100c; border-color: var(--copper); font-weight: 500;
+    }
+    .views, .axes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin: 4px 0 14px; }
+    details { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; }
+    summary { cursor: pointer; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    .actions { display: flex; gap: 8px; margin-top: 8px; }
+    .ghost { border-radius: 10px; padding: 8px 10px; flex: 1; }
+    .status { min-height: 2.4em; color: var(--dim); font-size: 11px; line-height: 1.45; margin: 10px 0 0; }
+    .status.error { color: var(--danger); }
+    .hint {
+      left: 22px; bottom: 16px; color: var(--dim); font-size: 11px; letter-spacing: 0.04em;
+      pointer-events: none;
+    }
+    .bar {
+      position: fixed; top: 0; left: 0; height: 2px; width: 0; z-index: 3;
+      background: var(--copper); pointer-events: none;
+    }
+    @media (max-width: 860px) {
+      .rail { top: auto; bottom: 46px; left: 10px; right: 10px; width: auto; flex-direction: row; }
+      .model { flex: 1; }
+      .model span { display: none; }
+      .panel { top: 58px; left: 10px; right: 10px; width: auto; max-height: 46vh; }
+      .hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wash"></div>
+  <div id="view"></div>
+  <div class="vignette"></div>
+  <div class="bar" id="bar"></div>
+  <header class="topbar">
+    <div class="word">PBR <i>studio</i></div>
+    <small>орбита · тайлинг · нормали</small>
+  </header>
+  <nav class="rail" id="rail"></nav>
+  <aside class="panel">
+    <h2>Множители</h2>
+    <div class="row" data-key="tex">
+      <label class="label"><span>Текстура</span><input class="num" type="number" min="0.25" max="16" step="0.05" value="1"></label>
+      <input type="range" min="0.25" max="16" step="0.05" value="1">
+      <div class="chips"></div>
+    </div>
+    <div class="row" data-key="nrm">
+      <label class="label"><span>Нормали</span><input class="num" type="number" min="0.25" max="16" step="0.05" value="1"></label>
+      <input type="range" min="0.25" max="16" step="0.05" value="1">
+      <div class="chips"></div>
+    </div>
+    <label class="check"><input type="checkbox" id="sync"> Связать текстуру и нормали</label>
+    <div class="row" data-key="strength">
+      <label class="label"><span>Сила нормалей</span><input class="num" type="number" min="-2" max="3" step="0.05" value="1"></label>
+      <input type="range" min="-2" max="3" step="0.05" value="1">
+    </div>
+    <h2>Вид</h2>
+    <div class="views" id="views">
+      <button type="button" data-view="pbr" aria-pressed="true">Свет</button>
+      <button type="button" data-view="albedo">Цвет</button>
+      <button type="button" data-view="normal">Нормали</button>
+      <button type="button" data-view="wire">Сетка</button>
+    </div>
+    <details>
+      <summary>Материал</summary>
+      <div class="row" data-key="rough">
+        <label class="label"><span>Шероховатость</span><input class="num" type="number" min="0" max="1" step="0.01" value="0.58"></label>
+        <input type="range" min="0" max="1" step="0.01" value="0.58">
+      </div>
+      <div class="row" data-key="metal">
+        <label class="label"><span>Металл</span><input class="num" type="number" min="0" max="1" step="0.01" value="0.03"></label>
+        <input type="range" min="0" max="1" step="0.01" value="0.03">
+      </div>
+      <div class="row" data-key="sheen">
+        <label class="label"><span>Шёлк кожи</span><input class="num" type="number" min="0" max="1" step="0.01" value="0.2"></label>
+        <input type="range" min="0" max="1" step="0.01" value="0.2">
+      </div>
+      <div class="row" data-key="coat">
+        <label class="label"><span>Лак</span><input class="num" type="number" min="0" max="1" step="0.01" value="0"></label>
+        <input type="range" min="0" max="1" step="0.01" value="0">
+      </div>
+    </details>
+    <details>
+      <summary>Свет и камера</summary>
+      <div class="row" data-key="env">
+        <label class="label"><span>Окружение</span><input class="num" type="number" min="0" max="3" step="0.01" value="1"></label>
+        <input type="range" min="0" max="3" step="0.01" value="1">
+      </div>
+      <div class="row" data-key="exposure">
+        <label class="label"><span>Экспозиция</span><input class="num" type="number" min="0.2" max="2.5" step="0.01" value="1"></label>
+        <input type="range" min="0.2" max="2.5" step="0.01" value="1">
+      </div>
+      <div class="row" data-key="key">
+        <label class="label"><span>Ключевой свет</span><input class="num" type="number" min="0" max="8" step="0.05" value="3.4"></label>
+        <input type="range" min="0" max="8" step="0.05" value="3.4">
+      </div>
+      <label class="check"><input type="checkbox" id="auto"> Автовращение камеры</label>
+      <div class="axes" id="axes">
+        <button type="button" data-axis="x">Модель +90° X</button>
+        <button type="button" data-axis="y">+90° Y</button>
+        <button type="button" data-axis="z">+90° Z</button>
+      </div>
+    </details>
+    <div class="actions">
+      <button class="ghost" type="button" id="frame">В кадр</button>
+      <button class="ghost" type="button" id="reset">Сброс</button>
+    </div>
+    <p class="status" id="status">В архивах только basecolor. Нормали считаются из рельефа альбедо и тайлятся отдельно.</p>
+  </aside>
+  <p class="hint">ЛКМ — орбита · колесо — масштаб · ПКМ — сдвиг · 1 2 3 — модели</p>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+    import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+    const MODELS = [
+      { id: "56b263", file: "56b263d4-296e-4538-b0c7-fee1029bf2e2.fbx", title: "56b263", hint: "светлая кожа", swatch: "#e7b5a4" },
+      { id: "1c026a", file: "1c026aa3-dd1b-4a4f-b357-8523ce7a85e7.fbx", title: "1c026a", hint: "медный тон", swatch: "#b55238" },
+      { id: "11b7aa", file: "11b7aaf4-504f-4a05-b5b6-ba2c0ce219fc.fbx", title: "11b7aa", hint: "сетка и волосы", swatch: "#c98978" },
+    ];
+
+    const DEFAULTS = {
+      tex: 1, nrm: 1, strength: 1, rough: 0.58, metal: 0.03, sheen: 0.2, coat: 0,
+      env: 1, exposure: 1, key: 3.4, sync: false, auto: false, view: "pbr",
+    };
+    const CHIPS = [1, 2, 4, 8];
+    const BAKE = 6.5;
+    const NORMAL_SIZE = 2048;
+
+    const state = { ...DEFAULTS, spin: { x: 0, y: 0, z: 0 } };
+    try {
+      const saved = JSON.parse(localStorage.getItem("pbr-studio") || "null");
+      if (saved && typeof saved === "object") Object.assign(state, saved, { spin: state.spin });
+      if (state.sync) state.nrm = state.tex;
+    } catch { /* keep defaults */ }
+
+    const statusEl = document.querySelector("#status");
+    const barEl = document.querySelector("#bar");
+    const mount = document.querySelector("#view");
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = state.exposure;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    mount.appendChild(renderer.domElement);
+    renderer.domElement.addEventListener("contextmenu", (event) => event.preventDefault());
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.05, 80);
+    camera.position.set(1.45, 1.12, 2.45);
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    const hemi = new THREE.HemisphereLight("#fff0e6", "#2a2428", 1.15);
+    scene.add(hemi);
+    const key = new THREE.DirectionalLight("#fff4ea", state.key);
+    key.position.set(2.8, 5.4, 3.1);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.near = 0.4;
+    key.shadow.camera.far = 18;
+    const shadowReach = 3.2;
+    key.shadow.camera.left = -shadowReach;
+    key.shadow.camera.right = shadowReach;
+    key.shadow.camera.top = shadowReach;
+    key.shadow.camera.bottom = -shadowReach;
+    key.shadow.bias = -0.00015;
+    scene.add(key);
+    const rim = new THREE.DirectionalLight("#9eb6ff", 1.35);
+    rim.position.set(-3.4, 2.2, -2.8);
+    scene.add(rim);
+
+    const stage = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1.06, 0.05, 96),
+      new THREE.MeshPhysicalMaterial({ color: "#2b2623", roughness: 0.4, metalness: 0.74, envMapIntensity: 0.65 }),
+    );
+    stage.receiveShadow = true;
+    stage.position.y = -0.025;
+    scene.add(stage);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0.86, 0);
+    controls.minDistance = 0.35;
+    controls.maxDistance = 9;
+    controls.zoomToCursor = true;
+    controls.autoRotate = state.auto;
+    controls.autoRotateSpeed = 1.05;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    controls.update();
+
+    let holder = null;
+    let loadToken = 0;
+    const anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    function setStatus(text, isError) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle("error", Boolean(isError));
+    }
+    function setBar(amount) {
+      barEl.style.width = `${Math.max(0, Math.min(1, amount)) * 100}%`;
+    }
+
+    function persist() {
+      const { spin, ...rest } = state;
+      localStorage.setItem("pbr-studio", JSON.stringify(rest));
+    }
+
+    function uniqueMaps(root) {
+      const maps = [];
+      root.traverse((obj) => {
+        if (!obj.isMesh) return;
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const mat of mats) {
+          const map = mat && (mat.map || mat.emissiveMap);
+          if (map && !maps.includes(map)) maps.push(map);
+        }
+      });
+      return maps;
+    }
+
+    function prepareAlbedo(map) {
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.wrapS = map.wrapT = THREE.RepeatWrapping;
+      map.anisotropy = anisotropy;
+      map.userData.baseRepeat = map.repeat.clone();
+      map.needsUpdate = true;
+    }
+
+    async function buildNormalMap(image, token) {
+      const size = NORMAL_SIZE;
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(image, 0, 0, size, size);
+      const src = ctx.getImageData(0, 0, size, size).data;
+      const out = ctx.createImageData(size, size);
+      const lum = new Float32Array(size * size);
+      for (let i = 0, p = 0; i < lum.length; i++, p += 4) {
+        lum[i] = (src[p] * 0.2126 + src[p + 1] * 0.7152 + src[p + 2] * 0.0722) / 255;
+      }
+      const pixels = out.data;
+      const rows = 40;
+      for (let y0 = 0; y0 < size; y0 += rows) {
+        if (token !== loadToken) return null;
+        const y1 = Math.min(size, y0 + rows);
+        for (let y = y0; y < y1; y++) {
+          const ym = (y - 1 + size) % size;
+          const yp = (y + 1) % size;
+          for (let x = 0; x < size; x++) {
+            const xm = (x - 1 + size) % size;
+            const xp = (x + 1) % size;
+            const tl = lum[ym * size + xm];
+            const t = lum[ym * size + x];
+            const tr = lum[ym * size + xp];
+            const l = lum[y * size + xm];
+            const r = lum[y * size + xp];
+            const bl = lum[yp * size + xm];
+            const b = lum[yp * size + x];
+            const br = lum[yp * size + xp];
+            const hx = (tr + 2 * r + br) - (tl + 2 * l + bl);
+            const hy = (bl + 2 * b + br) - (tl + 2 * t + tr);
+            let nx = -hx * BAKE;
+            let ny = -hy * BAKE;
+            let nz = 1;
+            const len = Math.hypot(nx, ny, nz) || 1;
+            const p = (y * size + x) * 4;
+            pixels[p] = (nx / len * 0.5 + 0.5) * 255;
+            pixels[p + 1] = (ny / len * 0.5 + 0.5) * 255;
+            pixels[p + 2] = (nz / len * 0.5 + 0.5) * 255;
+            pixels[p + 3] = 255;
+          }
+        }
+        setBar(0.55 + 0.45 * (y1 / size));
+        setStatus(`Нормали ${Math.round(100 * y1 / size)}%`);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      if (token !== loadToken) return null;
+      ctx.putImageData(out, 0, 0);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.NoColorSpace;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.anisotropy = anisotropy;
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function assignMaterials(root, normalByMap) {
+      root.traverse((obj) => {
+        if (!obj.isMesh) return;
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+        const source = Array.isArray(obj.material) ? obj.material : [obj.material];
+        const built = source.map((mat) => {
+          const map = (mat && (mat.map || mat.emissiveMap)) || null;
+          const normalMap = map ? normalByMap.get(map) || null : null;
+          if (normalMap && map) {
+            normalMap.flipY = map.flipY;
+            normalMap.offset.copy(map.offset);
+            normalMap.center.copy(map.center);
+            normalMap.rotation = map.rotation;
+          }
+          const pbr = new THREE.MeshPhysicalMaterial({
+            map,
+            normalMap,
+            roughness: state.rough,
+            metalness: state.metal,
+            sheen: state.sheen,
+            sheenRoughness: 0.62,
+            sheenColor: new THREE.Color("#ffd2c4"),
+            clearcoat: state.coat,
+            clearcoatRoughness: 0.28,
+            envMapIntensity: state.env,
+          });
+          const albedoMat = new THREE.MeshBasicMaterial({ map });
+          const normalMat = new THREE.MeshBasicMaterial({ map: normalMap });
+          return { pbr, albedoMat, normalMat };
+        });
+        source.forEach((mat) => mat && mat.dispose());
+        obj.userData.slots = built;
+        obj.material = built.length === 1 ? built[0].pbr : built.map((slot) => slot.pbr);
+      });
+    }
+
+    function eachSlot(visit) {
+      if (!holder) return;
+      holder.traverse((obj) => {
+        if (!obj.isMesh || !obj.userData.slots) return;
+        for (const slot of obj.userData.slots) visit(slot);
+      });
+    }
+
+    function applyRepeat(tex, factor) {
+      if (!tex) return;
+      const base = tex.userData.baseRepeat || new THREE.Vector2(1, 1);
+      tex.repeat.set(base.x * factor, base.y * factor);
+    }
+
+    function applyView() {
+      if (!holder) return;
+      holder.traverse((obj) => {
+        if (!obj.isMesh || !obj.userData.slots) return;
+        const next = obj.userData.slots.map((slot) => {
+          if (state.view === "albedo") return slot.albedoMat;
+          if (state.view === "normal") return slot.normalMat;
+          slot.pbr.wireframe = state.view === "wire";
+          return slot.pbr;
+        });
+        obj.material = next.length === 1 ? next[0] : next;
+      });
+    }
+
+    function applyMaterials() {
+      renderer.toneMappingExposure = state.exposure;
+      key.intensity = state.key;
+      controls.autoRotate = state.auto;
+      eachSlot((slot) => {
+        const { pbr } = slot;
+        applyRepeat(pbr.map, state.tex);
+        applyRepeat(pbr.normalMap, state.nrm);
+        if (pbr.normalMap) pbr.normalScale.set(state.strength, state.strength);
+        pbr.roughness = state.rough;
+        pbr.metalness = state.metal;
+        pbr.sheen = state.sheen;
+        pbr.clearcoat = state.coat;
+        pbr.envMapIntensity = state.env;
+        stage.material.envMapIntensity = state.env * 0.65;
+      });
+      applyView();
+      reflectControls();
+      persist();
+    }
+
+    function placeModel(root) {
+      root.rotation.set(state.spin.x, state.spin.y, state.spin.z);
+      root.scale.setScalar(1);
+      root.position.set(0, 0, 0);
+      root.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(root);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const height = Math.max(size.y, 0.001);
+      const scale = 1.72 / height;
+      root.scale.setScalar(scale);
+      root.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+      root.updateMatrixWorld(true);
+      const fitted = new THREE.Box3().setFromObject(root);
+      const fittedSize = fitted.getSize(new THREE.Vector3());
+      const radius = Math.max(1.05, Math.max(fittedSize.x, fittedSize.z) * 0.62);
+      stage.scale.set(radius, 1, radius);
+    }
+
+    function frameHome() {
+      const dist = 2.65;
+      controls.target.set(0, 0.86, 0);
+      camera.position.set(Math.sin(0.62) * dist, 1.08, Math.cos(0.62) * dist);
+      controls.update();
+    }
+
+    function countTris(root) {
+      let tris = 0;
+      root.traverse((obj) => {
+        if (!obj.isMesh || !obj.geometry) return;
+        const geo = obj.geometry;
+        tris += geo.index ? geo.index.count / 3 : (geo.attributes.position ? geo.attributes.position.count / 3 : 0);
+      });
+      return Math.round(tris);
+    }
+
+    function disposeHolder() {
+      if (!holder) return;
+      const textures = new Set();
+      const materials = new Set();
+      holder.traverse((obj) => {
+        if (!obj.isMesh) return;
+        obj.geometry?.dispose();
+        for (const slot of obj.userData.slots || []) {
+          for (const mat of [slot.pbr, slot.albedoMat, slot.normalMat]) {
+            if (!mat || materials.has(mat)) continue;
+            materials.add(mat);
+            if (mat.map) textures.add(mat.map);
+            if (mat.normalMap) textures.add(mat.normalMap);
+          }
+        }
+      });
+      for (const mat of materials) mat.dispose();
+      for (const tex of textures) tex.dispose();
+      scene.remove(holder);
+      holder = null;
+    }
+
+    function formatCount(value) {
+      return new Intl.NumberFormat("ru-RU").format(value);
+    }
+
+    async function showModel(model, token) {
+      disposeHolder();
+      if (token !== loadToken) return;
+      holder = new THREE.Group();
+      holder.add(model);
+      placeModel(model);
+      scene.add(holder);
+      frameHome();
+      const maps = uniqueMaps(model);
+      for (const map of maps) prepareAlbedo(map);
+      const normalByMap = new Map();
+      for (const map of maps) {
+        if (!map.image) continue;
+        const normal = await buildNormalMap(map.image, token);
+        if (!normal) return;
+        normal.userData.baseRepeat = new THREE.Vector2(1, 1);
+        normalByMap.set(map, normal);
+      }
+      if (token !== loadToken) {
+        for (const tex of normalByMap.values()) tex.dispose();
+        return;
+      }
+      assignMaterials(model, normalByMap);
+      applyMaterials();
+      const tex = maps[0]?.image;
+      const texNote = tex ? `${tex.width}²` : "без текстуры";
+      setBar(0);
+      setStatus(`${formatCount(countTris(model))} тр. · альбедо ${texNote} · нормали ${NORMAL_SIZE}²`);
+    }
+
+    function loadModel(id) {
+      const spec = MODELS.find((item) => item.id === id) || MODELS[0];
+      const token = ++loadToken;
+      history.replaceState(null, "", `#${spec.id}`);
+      document.querySelectorAll(".model").forEach((button) => {
+        button.setAttribute("aria-pressed", button.dataset.id === spec.id ? "true" : "false");
+      });
+      setBar(0.08);
+      setStatus("Читаю модель…");
+      const manager = new THREE.LoadingManager();
+      let parsed = null;
+      let assetsDone = false;
+      const ready = () => {
+        if (!parsed || !assetsDone || token !== loadToken) return;
+        showModel(parsed, token).catch((error) => {
+          console.error(error);
+          setStatus("Не удалось собрать материал.", true);
+          setBar(0);
+        });
+      };
+      manager.onProgress = (_url, loaded, total) => {
+        if (token !== loadToken || !total) return;
+        setBar(Math.min(0.5, loaded / total * 0.5));
+        setStatus(`Текстура ${Math.round(100 * loaded / total)}%`);
+      };
+      manager.onLoad = () => {
+        assetsDone = true;
+        ready();
+      };
+      manager.onError = (url) => {
+        if (token !== loadToken) return;
+        setStatus(`Не открылся файл ${url}`, true);
+        setBar(0);
+      };
+      const loader = new FBXLoader(manager);
+      loader.load(`models/${spec.file}`, (object) => {
+        parsed = object;
+        ready();
+      }, undefined, (error) => {
+        console.error(error);
+        if (token !== loadToken) return;
+        setStatus("FBX не загрузился.", true);
+        setBar(0);
+      });
+    }
+
+    function reflectControls() {
+      document.querySelectorAll(".row").forEach((row) => {
+        const key = row.dataset.key;
+        const value = state[key];
+        const range = row.querySelector('input[type="range"]');
+        const num = row.querySelector(".num");
+        if (range && document.activeElement !== range) range.value = String(value);
+        if (num && document.activeElement !== num) num.value = String(Math.round(value * 100) / 100);
+        row.querySelectorAll(".chips button").forEach((button) => {
+          button.setAttribute("aria-pressed", Math.abs(Number(button.dataset.v) - value) < 0.001 ? "true" : "false");
+        });
+      });
+      document.querySelector("#sync").checked = state.sync;
+      document.querySelector("#auto").checked = state.auto;
+      document.querySelectorAll("#views button").forEach((button) => {
+        button.setAttribute("aria-pressed", button.dataset.view === state.view ? "true" : "false");
+      });
+    }
+
+    function setTile(key, value) {
+      const next = Math.min(16, Math.max(0.25, value));
+      if (state.sync && (key === "tex" || key === "nrm")) {
+        state.tex = next;
+        state.nrm = next;
+      } else {
+        state[key] = next;
+      }
+      applyMaterials();
+    }
+
+    function bindRow(row) {
+      const key = row.dataset.key;
+      const range = row.querySelector('input[type="range"]');
+      const num = row.querySelector(".num");
+      const chips = row.querySelector(".chips");
+      const push = (raw) => setTile(key, Number(raw));
+      range.addEventListener("input", () => push(range.value));
+      num.addEventListener("change", () => push(num.value));
+      if (!chips || key === "strength") return;
+      for (const value of CHIPS) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.v = String(value);
+        button.textContent = `×${value}`;
+        button.addEventListener("click", () => push(value));
+        chips.appendChild(button);
+      }
+    }
+
+    const rail = document.querySelector("#rail");
+    for (const spec of MODELS) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "model";
+      button.dataset.id = spec.id;
+      button.innerHTML = `<i class="swatch" style="background:${spec.swatch}"></i><b>${spec.title}</b><span>${spec.hint}</span>`;
+      button.addEventListener("click", () => loadModel(spec.id));
+      rail.appendChild(button);
+    }
+    document.querySelectorAll(".row").forEach(bindRow);
+    document.querySelector("#sync").addEventListener("change", (event) => {
+      state.sync = event.target.checked;
+      if (state.sync) state.nrm = state.tex;
+      applyMaterials();
+    });
+    document.querySelector("#auto").addEventListener("change", (event) => {
+      state.auto = event.target.checked;
+      applyMaterials();
+    });
+    document.querySelector("#views").addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      state.view = button.dataset.view;
+      applyMaterials();
+    });
+    document.querySelector("#axes").addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button || !holder) return;
+      const axis = button.dataset.axis;
+      state.spin[axis] += Math.PI / 2;
+      const model = holder.children[0];
+      placeModel(model);
+    });
+    document.querySelector("#frame").addEventListener("click", frameHome);
+    document.querySelector("#reset").addEventListener("click", () => {
+      Object.assign(state, DEFAULTS);
+      state.spin.x = 0;
+      state.spin.y = 0;
+      state.spin.z = 0;
+      if (holder) placeModel(holder.children[0]);
+      applyMaterials();
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.target.matches("input")) return;
+      if (event.key === "1") loadModel(MODELS[0].id);
+      if (event.key === "2") loadModel(MODELS[1].id);
+      if (event.key === "3") loadModel(MODELS[2].id);
+      if (event.key === "f") frameHome();
+    });
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    renderer.setAnimationLoop(() => {
+      controls.update();
+      renderer.render(scene, camera);
+    });
+
+    reflectControls();
+    const hash = location.hash.replace("#", "");
+    loadModel(MODELS.some((item) => item.id === hash) ? hash : MODELS[0].id);
+  </script>
+</body>
+</html>
