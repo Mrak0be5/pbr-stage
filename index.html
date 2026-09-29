@@ -162,16 +162,16 @@
     <details>
       <summary>Материал</summary>
       <div class="row" data-key="rough">
-        <label class="label"><span>Шероховатость</span><input class="num" type="number" min="0" max="1" step="0.01" value="0.58"></label>
-        <input type="range" min="0" max="1" step="0.01" value="0.58">
+        <label class="label"><span>Шероховатость</span><input class="num" type="number" min="0" max="1" step="0.01" value="1"></label>
+        <input type="range" min="0" max="1" step="0.01" value="1">
       </div>
       <div class="row" data-key="metal">
-        <label class="label"><span>Металл</span><input class="num" type="number" min="0" max="1" step="0.01" value="0.03"></label>
-        <input type="range" min="0" max="1" step="0.01" value="0.03">
+        <label class="label"><span>Металл</span><input class="num" type="number" min="0" max="1" step="0.01" value="1"></label>
+        <input type="range" min="0" max="1" step="0.01" value="1">
       </div>
       <div class="row" data-key="sheen">
-        <label class="label"><span>Шёлк кожи</span><input class="num" type="number" min="0" max="1" step="0.01" value="0.2"></label>
-        <input type="range" min="0" max="1" step="0.01" value="0.2">
+        <label class="label"><span>Шёлк кожи</span><input class="num" type="number" min="0" max="1" step="0.01" value="0"></label>
+        <input type="range" min="0" max="1" step="0.01" value="0">
       </div>
       <div class="row" data-key="coat">
         <label class="label"><span>Лак</span><input class="num" type="number" min="0" max="1" step="0.01" value="0"></label>
@@ -203,7 +203,7 @@
       <button class="ghost" type="button" id="frame">В кадр</button>
       <button class="ghost" type="button" id="reset">Сброс</button>
     </div>
-    <p class="status" id="status">В архивах только basecolor. Нормали — мягкий рельеф из альбедо, без шума текстуры.</p>
+    <p class="status" id="status">Цвет, нормали, шероховатость и металл берутся из файлов модели.</p>
   </aside>
   <p class="hint">ЛКМ — орбита · колесо — масштаб · ПКМ — сдвиг · 1 2 3 — модели</p>
   <script type="importmap">
@@ -221,13 +221,37 @@
     import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
     const MODELS = [
-      { id: "56b263", file: "56b263d4-296e-4538-b0c7-fee1029bf2e2.fbx", title: "56b263", hint: "светлая кожа", swatch: "#e7b5a4" },
-      { id: "1c026a", file: "1c026aa3-dd1b-4a4f-b357-8523ce7a85e7.fbx", title: "1c026a", hint: "медный тон", swatch: "#b55238" },
-      { id: "11b7aa", file: "11b7aaf4-504f-4a05-b5b6-ba2c0ce219fc.fbx", title: "11b7aa", hint: "сетка и волосы", swatch: "#c98978" },
+      {
+        id: "683eaf",
+        file: "tripo_convert_06933c11-07c6-480c-87a2-b4263dac3456.fbx",
+        title: "683eaf",
+        hint: "ремни",
+        swatch: "#2b2b2b",
+        rough: "tripo_convert_06933c11-07c6-480c-87a2-b4263dac3456.fbm/683eafe5-7a6b-4246-b2e1-65a3f30be39b_roughness.JPEG",
+        metal: "tripo_convert_06933c11-07c6-480c-87a2-b4263dac3456.fbm/683eafe5-7a6b-4246-b2e1-65a3f30be39b_metallic.JPEG",
+      },
+      {
+        id: "a2bf02",
+        file: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbx",
+        title: "a2bf02",
+        hint: "сетка",
+        swatch: "#c47a62",
+        rough: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbm/a2bf022a-38d5-4b39-bd71-f3e3e3cf8b5a_roughness.JPEG",
+        metal: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbm/a2bf022a-38d5-4b39-bd71-f3e3e3cf8b5a_metallic.JPEG",
+      },
+      {
+        id: "5ee93b",
+        file: "tripo_convert_aad0c704-443b-43f3-b7f2-1e20af56c21c.fbx",
+        title: "5ee93b",
+        hint: "сапоги",
+        swatch: "#e4b8a8",
+        rough: "tripo_convert_aad0c704-443b-43f3-b7f2-1e20af56c21c.fbm/5ee93bed-bf44-467c-9980-041b7a32f5d2_roughness.JPEG",
+        metal: "tripo_convert_aad0c704-443b-43f3-b7f2-1e20af56c21c.fbm/5ee93bed-bf44-467c-9980-041b7a32f5d2_metallic.JPEG",
+      },
     ];
 
     const DEFAULTS = {
-      tex: 1, nrm: 1, strength: 1, rough: 0.58, metal: 0.03, sheen: 0.2, coat: 0,
+      tex: 1, nrm: 1, strength: 1, rough: 1, metal: 1, sheen: 0, coat: 0,
       env: 1, exposure: 1, key: 3.4, sync: false, auto: false, view: "pbr",
     };
     const CHIPS = [1, 2, 4, 8];
@@ -238,7 +262,7 @@
 
     const state = { ...DEFAULTS, spin: { x: 0, y: 0, z: 0 } };
     try {
-      const saved = JSON.parse(localStorage.getItem("pbr-studio-v2") || "null");
+      const saved = JSON.parse(localStorage.getItem("pbr-studio-v3") || "null");
       if (saved && typeof saved === "object") Object.assign(state, saved, { spin: state.spin });
       if (state.sync) state.nrm = state.tex;
     } catch { /* keep defaults */ }
@@ -318,7 +342,7 @@
 
     function persist() {
       const { spin, ...rest } = state;
-      localStorage.setItem("pbr-studio-v2", JSON.stringify(rest));
+      localStorage.setItem("pbr-studio-v3", JSON.stringify(rest));
     }
 
     function uniqueMaps(root) {
@@ -334,12 +358,24 @@
       return maps;
     }
 
-    function prepareAlbedo(map) {
-      map.colorSpace = THREE.SRGBColorSpace;
-      map.wrapS = map.wrapT = THREE.RepeatWrapping;
-      map.anisotropy = anisotropy;
-      map.userData.baseRepeat = map.repeat.clone();
-      map.needsUpdate = true;
+    function prepareMap(tex, colorSpace) {
+      if (!tex) return;
+      tex.colorSpace = colorSpace;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.anisotropy = anisotropy;
+      if (!tex.userData.baseRepeat) tex.userData.baseRepeat = tex.repeat.clone();
+      tex.needsUpdate = true;
+    }
+
+    function loadExtraMaps(spec) {
+      const loader = new THREE.TextureLoader();
+      const jobs = ["rough", "metal"].filter((key) => spec[key]).map((key) => new Promise((resolve) => {
+        loader.load(`models/${spec[key]}`, (tex) => {
+          prepareMap(tex, THREE.NoColorSpace);
+          resolve([key, tex]);
+        }, undefined, () => resolve([key, null]));
+      }));
+      return Promise.all(jobs).then((pairs) => Object.fromEntries(pairs));
     }
 
     function blurLuminance(src, size, radius) {
@@ -432,7 +468,7 @@
       return tex;
     }
 
-    function assignMaterials(root, normalByMap) {
+    function assignMaterials(root, normalByMap, extras) {
       root.traverse((obj) => {
         if (!obj.isMesh) return;
         obj.castShadow = true;
@@ -440,16 +476,24 @@
         const source = Array.isArray(obj.material) ? obj.material : [obj.material];
         const built = source.map((mat) => {
           const map = (mat && (mat.map || mat.emissiveMap)) || null;
-          const normalMap = map ? normalByMap.get(map) || null : null;
-          if (normalMap && map) {
+          const authoredNormal = mat && mat.normalMap;
+          const normalMap = authoredNormal || (map && normalByMap.get(map)) || null;
+          if (normalMap) prepareMap(normalMap, THREE.NoColorSpace);
+          if (normalMap && map && !authoredNormal) {
             normalMap.flipY = map.flipY;
             normalMap.offset.copy(map.offset);
             normalMap.center.copy(map.center);
             normalMap.rotation = map.rotation;
           }
+          const roughnessMap = extras.rough || (mat && mat.roughnessMap) || null;
+          const metalnessMap = extras.metal || (mat && mat.metalnessMap) || null;
+          prepareMap(roughnessMap, THREE.NoColorSpace);
+          prepareMap(metalnessMap, THREE.NoColorSpace);
           const pbr = new THREE.MeshPhysicalMaterial({
             map,
             normalMap,
+            roughnessMap,
+            metalnessMap,
             roughness: state.rough,
             metalness: state.metal,
             sheen: state.sheen,
@@ -504,6 +548,8 @@
       eachSlot((slot) => {
         const { pbr } = slot;
         applyRepeat(pbr.map, state.tex);
+        applyRepeat(pbr.roughnessMap, state.tex);
+        applyRepeat(pbr.metalnessMap, state.tex);
         applyRepeat(pbr.normalMap, state.nrm);
         if (pbr.normalMap) pbr.normalScale.set(state.strength, state.strength);
         pbr.roughness = state.rough;
@@ -565,8 +611,9 @@
           for (const mat of [slot.pbr, slot.albedoMat, slot.normalMat]) {
             if (!mat || materials.has(mat)) continue;
             materials.add(mat);
-            if (mat.map) textures.add(mat.map);
-            if (mat.normalMap) textures.add(mat.normalMap);
+            for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap"]) {
+              if (mat[key]) textures.add(mat[key]);
+            }
           }
         }
       });
@@ -580,7 +627,7 @@
       return new Intl.NumberFormat("ru-RU").format(value);
     }
 
-    async function showModel(model, token) {
+    async function showModel(model, token, spec) {
       disposeHolder();
       if (token !== loadToken) return;
       holder = new THREE.Group();
@@ -589,25 +636,43 @@
       scene.add(holder);
       frameHome();
       const maps = uniqueMaps(model);
-      for (const map of maps) prepareAlbedo(map);
+      for (const map of maps) prepareMap(map, THREE.SRGBColorSpace);
+      let realNormal = false;
+      model.traverse((obj) => {
+        if (!obj.isMesh) return;
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const mat of mats) {
+          if (mat && mat.normalMap) realNormal = true;
+        }
+      });
       const normalByMap = new Map();
-      for (const map of maps) {
-        if (!map.image) continue;
-        const normal = await buildNormalMap(map.image, token);
-        if (!normal) return;
-        normal.userData.baseRepeat = new THREE.Vector2(1, 1);
-        normalByMap.set(map, normal);
+      if (!realNormal) {
+        for (const map of maps) {
+          if (!map.image) continue;
+          const normal = await buildNormalMap(map.image, token);
+          if (!normal) return;
+          normal.userData.baseRepeat = new THREE.Vector2(1, 1);
+          normalByMap.set(map, normal);
+        }
       }
       if (token !== loadToken) {
         for (const tex of normalByMap.values()) tex.dispose();
         return;
       }
-      assignMaterials(model, normalByMap);
+      const extras = await loadExtraMaps(spec);
+      if (token !== loadToken) {
+        extras.rough?.dispose();
+        extras.metal?.dispose();
+        for (const tex of normalByMap.values()) tex.dispose();
+        return;
+      }
+      assignMaterials(model, normalByMap, extras);
       applyMaterials();
       const tex = maps[0]?.image;
       const texNote = tex ? `${tex.width}²` : "без текстуры";
+      const normalNote = realNormal ? "нормали из файла" : `нормали ${NORMAL_SIZE}²`;
       setBar(0);
-      setStatus(`${formatCount(countTris(model))} тр. · альбедо ${texNote} · нормали ${NORMAL_SIZE}²`);
+      setStatus(`${formatCount(countTris(model))} тр. · альбедо ${texNote} · ${normalNote}`);
     }
 
     function loadModel(id) {
@@ -624,7 +689,7 @@
       let assetsDone = false;
       const ready = () => {
         if (!parsed || !assetsDone || token !== loadToken) return;
-        showModel(parsed, token).catch((error) => {
+        showModel(parsed, token, spec).catch((error) => {
           console.error(error);
           setStatus("Не удалось собрать материал.", true);
           setBar(0);
