@@ -235,8 +235,10 @@
         id: "a2bf02",
         file: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbx",
         title: "a2bf02",
-        hint: "сетка",
+        hint: "четвереньки",
         swatch: "#c47a62",
+        azimuth: Math.PI / 2,
+        camY: 0.78,
         normal: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbm/Normal.png",
         rough: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbm/a2bf022a-38d5-4b39-bd71-f3e3e3cf8b5a_roughness.JPEG",
         metal: "tripo_convert_5b10531d-6658-417d-a308-58d5ca4715b5.fbm/a2bf022a-38d5-4b39-bd71-f3e3e3cf8b5a_metallic.JPEG",
@@ -592,10 +594,14 @@
       stage.scale.set(radius, 1, radius);
     }
 
+    let activeSpec = MODELS[0];
+
     function frameHome() {
       const dist = 2.65;
+      const yaw = activeSpec.azimuth ?? 0.62;
+      const camY = activeSpec.camY ?? 1.08;
       controls.target.set(0, 0.86, 0);
-      camera.position.set(Math.sin(0.62) * dist, 1.08, Math.cos(0.62) * dist);
+      camera.position.set(Math.sin(yaw) * dist, camY, Math.cos(yaw) * dist);
       controls.update();
     }
 
@@ -643,6 +649,7 @@
       holder.add(model);
       placeModel(model);
       scene.add(holder);
+      activeSpec = spec;
       frameHome();
       const maps = uniqueMaps(model);
       for (const map of maps) prepareMap(map, THREE.SRGBColorSpace);
